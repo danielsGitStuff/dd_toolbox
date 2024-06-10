@@ -1,0 +1,1 @@
+Some personal, convenient Python classes to make life a bit easier.
