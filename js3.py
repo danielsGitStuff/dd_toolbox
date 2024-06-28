@@ -9,8 +9,7 @@ from typing import List, Dict, Set, TypeVar, Optional, Type, Any
 
 
 class JS3:
-    """The basic class. These objects will be traversed and any Lists, Dicts, Sets or references to other instances will be included in the serialised JSON."""
-    pass
+    ignored: Set[str] = {}
 
 
 SKIP: Set[str] = {'__objclass__', '_sort_order_'}
@@ -129,6 +128,8 @@ class O:
             js: JS3 = self.ins
             self.is_js = True
             for k, v in js.__dict__.items():
+                if k in js.ignored:
+                    continue
                 o: O = traversal.create_o(v)
                 self.d[k] = o
                 traversal.stack.append(k)
