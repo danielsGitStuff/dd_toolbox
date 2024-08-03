@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import json
 from datetime import date
 from enum import Enum
@@ -9,7 +10,7 @@ from typing import List, Dict, Set, TypeVar, Optional, Type, Any
 
 
 class JS3:
-    ignored: Set[str] = {}
+    ignored: Set[str] = set()
 
 
 SKIP: Set[str] = {'__objclass__', '_sort_order_'}
@@ -17,6 +18,19 @@ SKIP: Set[str] = {'__objclass__', '_sort_order_'}
 # Define the type variable T
 T = TypeVar('T', str, int, bool, float, List, Dict, Set, Enum, date, JS3)
 T_SIMPLE: Set[Type] = {str, bool, int, float}
+
+
+class DateWrap:
+    def __init__(self, d: datetime.date):
+        self.d: datetime.date = d
+
+    def __hash__(self):
+        return id(self)
+
+    def date_js(self) -> Dict[str, Any]:
+        value: str = self.d.strftime("%Y-%m-%d")
+        d: Dict[str, Any] = {"__ci": "DD", "v": value}
+        return d
 
 
 class DictWrap:
@@ -117,6 +131,7 @@ class O:
         self.is_dict: bool = isinstance(ins, Dict)
         self.is_none: bool = ins is None
         self.is_enum: bool = isinstance(ins, Enum)
+        self.is_date: bool = isinstance(ins, datetime.date)
         self.representation: Dict[str, Type] = {}
 
     def traverse(self, traversal: Traversal):
@@ -181,6 +196,8 @@ class O:
                 traversal.stack.append("E.V")
                 ov.traverse(traversal=traversal)
                 traversal.stack.pop()
+        elif self.is_date:
+            d: datetime.date = self.ins
         else:
             raise RuntimeError(f"cannot handle '{type(self.ins)}")
         traversal.stack.pop()
@@ -219,11 +236,13 @@ class O:
                 v: Any = vv.full()
                 d[k] = v
             return DictWrap(d)
-        elif self.is_enum:
+        if self.is_enum:
             d: Dict = {}
             for k, v in self.dd.items():
                 d[k.full()] = v.full()
             return EnumWrap(d, ci=self.ci, index=self.index)
+        if self.is_date:
+            return DateWrap(self.ins)
         else:
             raise NotImplementedError
 
@@ -247,6 +266,8 @@ class LeEncoder(JSONEncoder):
             return obj.set_js()
         if isinstance(obj, Set):
             return {"__ci": "S", "ls": list(obj)}
+        if isinstance(obj, DateWrap):
+            return obj.date_js()
         return super().default(obj)
 
 
@@ -269,7 +290,7 @@ class JS3Enc:
         js: str = json.dumps(x, indent=indent, cls=LeEncoder)
         return js
 
-    def save(self, file: Path, indent: int = 2):
+    def save(self, file: Path, indent: Optional[int] = None):
         x = self.__encode()
         with open(file, "w") as f:
             json.dump(x, f, indent=indent, cls=LeEncoder)

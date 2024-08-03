@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import datetime
 import importlib
 import json
+import sys
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Any, Dict, List, Type, Set
@@ -48,6 +50,13 @@ class JS3Dec:
         self.__read_src()
         return self.decode_instance(self.dicts)
 
+    def instance(self, cls: type):
+        try:
+            return cls()
+        except Exception as e:
+            print(f"Could not instantiate '{cls}'.", file=sys.stderr)
+            raise e
+
     def decode_instance(self, src_ins: Dict[Any, Any] | List[Any]) -> Any:
         ci: Optional[str] = None
         idd: Optional[int] = None
@@ -62,7 +71,7 @@ class JS3Dec:
                 mod: str = splits[0]
                 cl: str = splits[1]
                 cls = self.get_class_from_module(module_name=mod, class_name=cl)
-                ins = cls()
+                ins = self.instance(cls)
                 self.id_2_obj[idd] = ins
                 for field, v in src_ins.items():
                     if field in SKIP:
@@ -92,6 +101,13 @@ class JS3Dec:
                 e: Enum = en[name]
                 self.id_2_obj[index] = e
                 return e
+            if "DD" == ci:
+                date_str: str = src_ins["v"]
+                d: datetime.date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                return d
+            # ref: Optional[int] = src_ins.get("__r", None)
+            # if ref is not None:
+            #     return self.id_2_obj[ref]
             raise RuntimeError(f"cannot deal with ci '{ci}'.")
         if isinstance(src_ins, List):
             ls: List = []
