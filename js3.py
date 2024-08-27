@@ -6,7 +6,7 @@ from datetime import date
 from enum import Enum
 from json import JSONEncoder
 from pathlib import Path
-from typing import List, Dict, Set, TypeVar, Optional, Type, Any
+from typing import List, Dict, Set, TypeVar, Optional, Type, Any, Tuple
 
 
 class JS3:
@@ -132,6 +132,7 @@ class O:
         self.is_none: bool = ins is None
         self.is_enum: bool = isinstance(ins, Enum)
         self.is_date: bool = isinstance(ins, datetime.date)
+        self.is_tuple: bool = isinstance(ins, Tuple)
         self.representation: Dict[str, Type] = {}
 
     def traverse(self, traversal: Traversal):
@@ -154,7 +155,6 @@ class O:
         elif self.is_simple or self.is_none:
             pass
         elif self.is_list:
-            self.is_list = True
             ls: List[Any] = self.ins
             for v in ls:
                 o: O = traversal.create_o(v)
@@ -162,8 +162,15 @@ class O:
                 traversal.stack.append('LS')
                 o.traverse(traversal=traversal)
                 traversal.stack.pop()
+        elif self.is_tuple:
+            ts: Tuple = self.ins
+            for t in ts:
+                o: O = traversal.create_o(t)
+                self.ls.append(o)
+                traversal.stack.append('TS')
+                o.traverse(traversal=traversal)
+                traversal.stack.pop()
         elif self.is_set:
-            self.is_set = True
             ss: Set[Any] = self.ins
             for s in ss:
                 o: O = traversal.create_o(s)
@@ -219,7 +226,7 @@ class O:
                 o: O = o
                 d[field] = o.full()
             return d
-        if self.is_list:
+        if self.is_list or self.is_tuple:
             ls: List[Any] = []
             for o in self.ls:
                 ls.append(o.full())
