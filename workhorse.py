@@ -37,10 +37,32 @@ class Workload:
 class Workhorse:
     class StaticMethods:
         @staticmethod
-        def partition_list(ls:List[Any], n:int) -> List[List[Any]]:
-            """Partitions a list into approximately equal n parts."""
-            q, r = divmod(len(ls), n)
-            return [ls[i * q + min(i, r):(i + 1) * q + min(i + 1, r)] for i in range(n)]
+        def partition_list(ls: List[Any], n: int, max_size: Optional[int] = None) -> List[List[Any]]:
+            """
+            Partitions a list into n parts or more such that each sublist
+            contains at most max_size parts (if specified).
+
+            Args:
+                ls: The list to partition.
+                n: The desired minimum number of partitions.
+                max_size: Optional. The maximum size of each sublist.
+
+            Returns:
+                A list of sublists.
+            """
+
+            if max_size is None:
+                q, r = divmod(len(ls), n)
+                return [ls[i * q + min(i, r):(i + 1) * q + min(i + 1, r)] for i in range(n)]
+            else:
+                num_partitions = max(n, (len(ls) + max_size - 1) // max_size)
+                result = []
+                for i in range(num_partitions):
+                    start = i * max_size
+                    end = min((i + 1) * max_size, len(ls))
+                    if start < end:  # Ensure we don't add empty sublists
+                        result.append(ls[start:end])
+                return result
 
         @staticmethod
         def static_execute(workload: Workload):
