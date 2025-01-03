@@ -37,6 +37,12 @@ class Workload:
 class Workhorse:
     class StaticMethods:
         @staticmethod
+        def partition_list(ls:List[Any], n:int) -> List[List[Any]]:
+            """Partitions a list into approximately equal n parts."""
+            q, r = divmod(len(ls), n)
+            return [ls[i * q + min(i, r):(i + 1) * q + min(i + 1, r)] for i in range(n)]
+
+        @staticmethod
         def static_execute(workload: Workload):
             try:
                 return workload.get_result()
