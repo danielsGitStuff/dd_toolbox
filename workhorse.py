@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import traceback
 from concurrent.futures import ProcessPoolExecutor
+from shared.lok import Lok
 from typing import List, Any, Optional
 
 
@@ -12,6 +13,7 @@ class Workload:
         self.executed: bool = False
         self.result: Any = None
         self.index: Optional[int] = None
+        self.lok: Lok = Lok(name=self.__class__.__qualname__)
 
     def run(self):
         if self.executed:
