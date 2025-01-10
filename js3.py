@@ -20,8 +20,14 @@ T = TypeVar('T', str, int, bool, float, List, Dict, Set, Enum, date, JS3)
 T_SIMPLE: Set[Type] = {str, bool, int, float}
 
 
-class DateWrap:
-    def __init__(self, d: datetime.date):
+class Wrap:
+    def __init__(self, o: O):
+        self.o: O = o
+
+
+class DateWrap(Wrap):
+    def __init__(self, o: O, d: datetime.date):
+        super().__init__(o)
         self.d: datetime.date = d
 
     def __hash__(self):
@@ -30,11 +36,34 @@ class DateWrap:
     def date_js(self) -> Dict[str, Any]:
         value: str = self.d.strftime("%Y-%m-%d")
         d: Dict[str, Any] = {"__ci": "DD", "v": value}
+        if self.o.ref_counter > 1:
+            d['__id'] = self.o.index
         return d
 
 
-class DictWrap:
-    def __init__(self, something: Any):
+class RefWrap:
+    def __init__(self, ref_id: int):
+        self.ref_id = ref_id
+
+    def ref_js(self) -> Dict[str, int]:
+        return {'__r': self.ref_id}
+
+
+class ListWrap(Wrap):
+    def __init__(self, o: O, something: Any):
+        super().__init__(o)
+        self.o: O = o
+        self.ls: List[Any] = something
+
+    def ls_js(self) -> Dict[str, str | List]:
+        if self.o.ref_counter > 1:
+            return {'__ci': 'LW', '__id': self.o.index, 'ls': self.ls}
+        return self.ls
+
+
+class DictWrap(Wrap):
+    def __init__(self, o: O, something: Any):
+        super().__init__(o)
         self.d: Optional[Dict[Any, Any]] = something if isinstance(something, Dict) else None
         self.something: Any = something if self.d is None else None
 
@@ -56,8 +85,9 @@ class DictWrap:
         return f"{'D' if self.something is None else 'S'} <- {self.__hash__()}"
 
 
-class EnumWrap:
-    def __init__(self, d: Dict[Any, Any], ci: str, index: int):
+class EnumWrap(Wrap):
+    def __init__(self, o: O, d: Dict[Any, Any], ci: str, index: int):
+        super().__init__(o)
         self.d: Dict[Any, Any] = d
         self.ci: str = ci
         self.index: int = index
@@ -69,11 +99,14 @@ class EnumWrap:
         for k, v in self.d.items():
             ks.append(k)
             vs.append(v)
+        if self.o.ref_counter > 1:
+            d['__id'] = self.o.index
         return d
 
 
-class SetWrap:
-    def __init__(self, something: Any):
+class SetWrap(Wrap):
+    def __init__(self, o: O, something: Any):
+        super().__init__(o)
         self.s: Optional[List[Any]] = something if isinstance(something, List) else None
         self.something: Any = something if self.s is None else None
 
@@ -83,7 +116,7 @@ class SetWrap:
     def set_js(self) -> Dict[str, str | List]:
         if self.something is None:
             ss: List[Any] = []
-            d: Dict[str, str | Any] = {"__ci": "S", "s": ss}
+            d: Dict[str, str | Any] = {"__ci": "S", '__id': self.o.index, "s": ss}
             for s in self.s:
                 ss.append(s)
             return d
@@ -93,6 +126,7 @@ class SetWrap:
 class Traversal:
     def __init__(self):
         self.visited_instances: Dict[int, O] = {}
+        self.ref_counter: Dict[int, int] = {}
         self.index: int = 0
         self.stack: List[str | int] = []
 
@@ -104,14 +138,21 @@ class Traversal:
     def create_o(self, ins: T) -> O:
         iid: int = id(ins)
         if iid in self.visited_instances:
-            return self.visited_instances[iid]
+            return self.visited_instances[iid].ref_inc()
         o: O = O(ins)
         o.index = self.create_id()
         return o
 
+    def visit_instance(self, o: O):
+        self.visited_instances[o.iid] = o
+        if o.iid not in self.ref_counter:
+            self.ref_counter[o.iid] = 0
+        self.ref_counter[o.iid] += 1
+
 
 class O:
     def __init__(self, ins: T):
+        self.ref_counter: int = 1
         self.ins: T = ins
         self.iid: int = id(ins)
         self.index: Optional[int] = None
@@ -135,10 +176,14 @@ class O:
         self.is_tuple: bool = isinstance(ins, Tuple)
         self.representation: Dict[str, Type] = {}
 
+    def ref_inc(self) -> O:
+        self.ref_counter += 1
+        return self
+
     def traverse(self, traversal: Traversal):
         if self.iid in traversal.visited_instances:
             return
-        traversal.visited_instances[self.iid] = self
+        traversal.visit_instance(self)
         traversal.stack.append(self.iid)
         if self.is_js:
             js: JS3 = self.ins
@@ -209,8 +254,8 @@ class O:
             raise RuntimeError(f"cannot handle '{type(self.ins)}")
         traversal.stack.pop()
 
-    def ref(self) -> DictWrap:
-        return DictWrap({"__r": self.index})
+    def ref(self) -> RefWrap:
+        return RefWrap(self.index)
 
     def full(self) -> Any:
         if self.is_simple:
@@ -230,26 +275,26 @@ class O:
             ls: List[Any] = []
             for o in self.ls:
                 ls.append(o.full())
-            return ls
+            return ListWrap(o=self, something=ls)
         if self.is_set:
             ss: List[Any] = []
             for o in self.s:
                 ss.append(o.full())
-            return SetWrap(ss)
+            return SetWrap(o=self, something=ss)
         if self.is_dict:
             d: Dict[Any, Any] = {}
             for kk, vv in self.dd.items():
                 k: Any = kk.full()
                 v: Any = vv.full()
                 d[k] = v
-            return DictWrap(d)
+            return DictWrap(o=self, something=d)
         if self.is_enum:
             d: Dict = {}
             for k, v in self.dd.items():
                 d[k.full()] = v.full()
-            return EnumWrap(d, ci=self.ci, index=self.index)
+            return EnumWrap(o=self, d=d, ci=self.ci, index=self.index)
         if self.is_date:
-            return DateWrap(self.ins)
+            return DateWrap(o=self, d=self.ins)
         else:
             raise NotImplementedError
 
@@ -265,6 +310,8 @@ class O:
 
 class LeEncoder(JSONEncoder):
     def default(self, obj):
+        if isinstance(obj, ListWrap):
+            return obj.ls_js()
         if isinstance(obj, DictWrap):
             return obj.dict_js()
         if isinstance(obj, EnumWrap):
@@ -275,6 +322,8 @@ class LeEncoder(JSONEncoder):
             return {"__ci": "S", "ls": list(obj)}
         if isinstance(obj, DateWrap):
             return obj.date_js()
+        if isinstance(obj, RefWrap):
+            return obj.ref_js()
         return super().default(obj)
 
 

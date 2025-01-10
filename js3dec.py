@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import sys
+
 import datetime
 import importlib
 import json
-import sys
 from enum import Enum
 from pathlib import Path
 from typing import Optional, Any, Dict, List, Type, Set
@@ -66,6 +67,9 @@ class JS3Dec:
         if isinstance(src_ins, Dict):
             ci = src_ins.get("__ci", None)
             idd = src_ins.get("__id", None)
+            ref_id: Optional[int] = src_ins.get('__r', None)
+            if ref_id is not None:
+                return self.id_2_obj[ref_id]
             if ci is not None and "/" in ci:
                 splits: List[str] = ci.split("/")
                 mod: str = splits[0]
@@ -79,32 +83,19 @@ class JS3Dec:
                     sub_ins: Any = self.decode_instance(v)
                     setattr(ins, field, sub_ins)
                 return ins
+            if 'LW' == ci:
+                return self.decode_ls(src_ins)
             if "DW" == ci:
                 return self.decode_dw(src_ins)
             if "S" == ci:
-                d: Dict = src_ins
-                s: Set = set()
-                ls: List = d['s']
-                for e in ls:
-                    v = self.decode_instance(e)
-                    s.add(v)
-                return s
+                return self.decode_set(src_ins)
             if "E" == ci:
-                d: Dict = self.decode_dw(src_ins)
-                index: int = src_ins["__id"]
-                cci: str = src_ins["__cci"]
-                cc: List[str] = cci.split("/")
-                mod: str = cc[0]
-                cl: str = cc[1]
-                name = d["_name_"]
-                en = self.get_class_from_module(module_name=mod, class_name=cl)
-                e: Enum = en[name]
-                self.id_2_obj[index] = e
-                return e
+                return self.decode_enum(src_ins)
             if "DD" == ci:
                 date_str: str = src_ins["v"]
                 d: datetime.date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
                 return d
+
             # ref: Optional[int] = src_ins.get("__r", None)
             # if ref is not None:
             #     return self.id_2_obj[ref]
@@ -120,6 +111,9 @@ class JS3Dec:
 
     def decode_dw(self, src_d: Dict):
         d: Dict = {}
+        iid: Optional[int] = src_d.get('__id', None)
+        if iid is not None:
+            self.id_2_obj[iid] = d
         ks: List = src_d['ks']
         vs: List = src_d['vs']
         for k, v in zip(ks, vs):
@@ -129,3 +123,38 @@ class JS3Dec:
             sub_v = self.decode_instance(v)
             d[sub_k] = sub_v
         return d
+
+    def decode_ls(self, src: Dict) -> List[Any]:
+        src_ls: List[Any] = src['ls']
+        ls: List[Any] = []
+        iid: int = src['__id']
+        if iid is not None:
+            self.id_2_obj[iid] = ls
+        for elem in src_ls:
+            decoded_elem = self.decode_instance(elem)
+            ls.append(decoded_elem)
+        return ls
+
+    def decode_set(self, src: Dict[str, Any]) -> Set[Any]:
+        s: Set = set()
+        iid: int = src['__id']
+        if iid is not None:
+            self.id_2_obj[iid] = s
+        ls: List = src['s']
+        for e in ls:
+            v = self.decode_instance(e)
+            s.add(v)
+        return s
+
+    def decode_enum(self, src_ins: Dict[str,Any]) -> Enum:
+        d: Dict = self.decode_dw(src_ins)
+        index: int = src_ins["__id"]
+        cci: str = src_ins["__cci"]
+        cc: List[str] = cci.split("/")
+        mod: str = cc[0]
+        cl: str = cc[1]
+        name = d["_name_"]
+        en = self.get_class_from_module(module_name=mod, class_name=cl)
+        e: Enum = en[name]
+        self.id_2_obj[index] = e
+        return e
