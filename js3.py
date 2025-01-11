@@ -205,6 +205,8 @@ class O:
                 o: O = traversal.create_o(v)
                 self.ls.append(o)
                 traversal.stack.append('LS')
+                # if v is not None and v.__class__.__qualname__ == 'NXM':
+                #     print(v)
                 o.traverse(traversal=traversal)
                 traversal.stack.pop()
         elif self.is_tuple:
