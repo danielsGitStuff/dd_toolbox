@@ -4,6 +4,7 @@ import sys
 
 import datetime
 import importlib
+import inspect
 import json
 from enum import Enum
 from pathlib import Path
@@ -51,9 +52,45 @@ class JS3Dec:
         self.__read_src()
         return self.decode_instance(self.dicts)
 
-    def instance(self, cls: type):
+    def instance(self, cls: Type) -> Any:
+        """
+        Creates an instance of the given class.
+
+        If the class has a constructor without arguments, it calls that.
+        Otherwise, it attempts to find a constructor and call it with None values
+        for all arguments.
+        """
         try:
             return cls()
+        except TypeError as e:
+            if "no arguments" in str(e) or "missing" in str(e) and "required" in str(e):
+                # Likely a constructor with arguments
+                try:
+                    # Inspect the constructor arguments
+                    init_method = getattr(cls, "__init__")
+                    if init_method is object.__init__:
+                        # If the class doesn't have its own __init__, it inherits object.__init__, which takes no arguments.
+                        # This should have been caught by the initial cls() call, but handle it just in case.
+                        return cls()
+
+                    signature = inspect.signature(init_method)
+
+                    # Get the constructor arguments (excluding 'self')
+                    parameters = [
+                        p
+                        for p in signature.parameters.values()
+                        if p.name != "self"
+                           and p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+                    ]
+
+                    # Create an instance with None values for all arguments
+                    return cls(*[None] * len(parameters))
+                except Exception as inner_e:
+                    print(f"Could not instantiate '{cls}' with None values.", file=sys.stderr)
+                    raise inner_e
+            else:
+                print(f"Could not instantiate '{cls}'.", file=sys.stderr)
+                raise e
         except Exception as e:
             print(f"Could not instantiate '{cls}'.", file=sys.stderr)
             raise e
