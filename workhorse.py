@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import sys
+
+import math
+
 import traceback
 from concurrent.futures import ProcessPoolExecutor
 from shared.lok import Lok
@@ -34,6 +37,22 @@ class Workload:
 
     def pre_execution(self):
         pass
+
+
+class AutoBatchWorkload(Workload):
+    """used by Workhorse when you enable batching. Just encapsulates actual workloads."""
+    def __init__(self, workloads: List[Workload]):
+        super().__init__()
+        self.workloads: List[Workload] = workloads
+
+    def run_impl(self) -> Any:
+        results: List[Any] = []
+        for wl in self.workloads:
+            wl: Workload = wl
+            wl.get_result()
+            # each workload must be the result such that it is returned to the parent process properly
+            results.append(wl)
+        return results
 
 
 class Workhorse:
@@ -94,10 +113,18 @@ class Workhorse:
             return formatted_time
 
     def __init__(self, threads: int = 4):
-        self.threads: int = threads
+        self.processes: int = threads
         self.workloads: List[Workload] = []
         self.closed: bool = False
-        self.executor: ProcessPoolExecutor = ProcessPoolExecutor(max_workers=self.threads)
+        self._batch: bool = False
+        self._batch_size: Optional[int] = 0
+        self.executor: ProcessPoolExecutor = ProcessPoolExecutor(max_workers=self.processes)
+        self.lok: Lok = Lok(src=self)
+
+    def batch(self, batch_size: Optional[int] = None) -> Workhorse:
+        self._batch = True
+        self._batch_size = batch_size
+        return self
 
     def add_runnable(self, workload: Workload):
         workload.index = len(self.workloads)
@@ -109,8 +136,29 @@ class Workhorse:
         self.closed = True
         futures = []
         remaining_work: List[Workload] = [w for w in self.workloads if not w.check_past_execution()]
-        work = self.workloads
-        print(f"'{type(self).__name__}' will work on {len(work)} workloads using {self.threads} processes.")
+        self.lok(
+            f"'{type(self).__name__}' will work on {len(remaining_work)} workloads using {self.processes} processes. Batch is {self._batch}, batch size is {self._batch_size}.")
+        if self._batch:
+            # batch the remaining workloads
+            batched_work: List[List[Workload]] = [[]]
+            if self._batch_size is None:
+                idx: int = 0
+                max_idx: int = math.ceil(len(remaining_work) / self.processes) + 1
+                for w in remaining_work:
+                    batched_work[-1].append(w)
+                    idx += 1
+                    if idx == max_idx:
+                        idx = 0
+                        batched_work.append([])
+            else:
+                idx: int = 0
+                for w in remaining_work:
+                    batched_work[-1].append(w)
+                    idx += 1
+                    if idx == self._batch_size:
+                        idx = 0
+                        batched_work.append([])
+            remaining_work = [AutoBatchWorkload(workloads=batch) for batch in batched_work]
         for w in remaining_work:
             w.pre_execution()
         # todo serialise lib objects
@@ -123,11 +171,19 @@ class Workhorse:
             w: Workload = w
             w.result = fr
             w.executed = True
-        results = [w.get_result() for w in self.workloads]
+        workloads: List[Workload] = self.workloads.copy()
+        if self._batch:
+            # the results are contained in the AutoBatchWorkloads and must be unwrapped
+            for batch_wl in remaining_work:
+                batch_wl: AutoBatchWorkload = batch_wl
+                for w in batch_wl.result:
+                    w: Workload = w
+                    workloads[w.index] = w
+        results = [w.get_result() for w in workloads]
         return results
 
     def reset(self) -> Workhorse:
         self.closed = False
         self.workloads = []
-        self.executor = ProcessPoolExecutor(max_workers=self.threads)
+        self.executor = ProcessPoolExecutor(max_workers=self.processes)
         return self
