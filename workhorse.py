@@ -136,49 +136,50 @@ class Workhorse:
         self.closed = True
         futures = []
         remaining_work: List[Workload] = [w for w in self.workloads if not w.check_past_execution()]
-        self.lok(
-            f"'{type(self).__name__}' will work on {len(remaining_work)} workloads using {self.processes} processes. Batch is {self._batch}, batch size is {self._batch_size}.")
-        if self._batch:
-            # batch the remaining workloads
-            batched_work: List[List[Workload]] = [[]]
-            if self._batch_size is None:
-                idx: int = 0
-                max_idx: int = math.ceil(len(remaining_work) / self.processes) + 1
-                for w in remaining_work:
-                    batched_work[-1].append(w)
-                    idx += 1
-                    if idx == max_idx:
-                        idx = 0
-                        batched_work.append([])
-            else:
-                idx: int = 0
-                for w in remaining_work:
-                    batched_work[-1].append(w)
-                    idx += 1
-                    if idx == self._batch_size:
-                        idx = 0
-                        batched_work.append([])
-            remaining_work = [AutoBatchWorkload(workloads=batch) for batch in batched_work]
-        for w in remaining_work:
-            w.pre_execution()
-        # todo serialise lib objects
-        for w in remaining_work:
-            f = self.executor.submit(Workhorse.StaticMethods.static_execute, workload=w)
-            futures.append(f)
-        self.executor.shutdown()
-        debug = [f.result() for f in futures]
-        for w, fr in zip(remaining_work, debug):
-            w: Workload = w
-            w.result = fr
-            w.executed = True
         workloads: List[Workload] = self.workloads.copy()
-        if self._batch:
-            # the results are contained in the AutoBatchWorkloads and must be unwrapped
-            for batch_wl in remaining_work:
-                batch_wl: AutoBatchWorkload = batch_wl
-                for w in batch_wl.result:
-                    w: Workload = w
-                    workloads[w.index] = w
+        if len(remaining_work) > 0:
+            self.lok(
+                f"'{type(self).__name__}' will work on {len(remaining_work)} workloads using {self.processes} processes. Batch is {self._batch}, batch size is {self._batch_size}.")
+            if self._batch:
+                # batch the remaining workloads
+                batched_work: List[List[Workload]] = [[]]
+                if self._batch_size is None:
+                    idx: int = 0
+                    max_idx: int = math.ceil(len(remaining_work) / self.processes) + 1
+                    for w in remaining_work:
+                        batched_work[-1].append(w)
+                        idx += 1
+                        if idx == max_idx:
+                            idx = 0
+                            batched_work.append([])
+                else:
+                    idx: int = 0
+                    for w in remaining_work:
+                        batched_work[-1].append(w)
+                        idx += 1
+                        if idx == self._batch_size:
+                            idx = 0
+                            batched_work.append([])
+                remaining_work = [AutoBatchWorkload(workloads=batch) for batch in batched_work]
+            for w in remaining_work:
+                w.pre_execution()
+            # todo serialise lib objects
+            for w in remaining_work:
+                f = self.executor.submit(Workhorse.StaticMethods.static_execute, workload=w)
+                futures.append(f)
+            self.executor.shutdown()
+            debug = [f.result() for f in futures]
+            for w, fr in zip(remaining_work, debug):
+                w: Workload = w
+                w.result = fr
+                w.executed = True
+            if self._batch:
+                # the results are contained in the AutoBatchWorkloads and must be unwrapped
+                for batch_wl in remaining_work:
+                    batch_wl: AutoBatchWorkload = batch_wl
+                    for w in batch_wl.result:
+                        w: Workload = w
+                        workloads[w.index] = w
         results = [w.get_result() for w in workloads]
         return results
 
