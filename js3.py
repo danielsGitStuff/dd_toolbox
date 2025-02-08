@@ -6,7 +6,7 @@ from datetime import date
 from enum import Enum
 from json import JSONEncoder
 from pathlib import Path
-from typing import List, Dict, Set, TypeVar, Optional, Type, Any, Tuple
+from typing import List, Dict, Set, TypeVar, Optional, Type, Any, Tuple, Callable
 
 
 class JS3:
@@ -311,6 +311,24 @@ class O:
 
 
 class LeEncoder(JSONEncoder):
+    @staticmethod
+    def static_default(obj):
+        if isinstance(obj, ListWrap):
+            return obj.ls_js()
+        if isinstance(obj, DictWrap):
+            return obj.dict_js()
+        if isinstance(obj, EnumWrap):
+            return obj.enum_js()
+        if isinstance(obj, SetWrap):
+            return obj.set_js()
+        if isinstance(obj, Set):
+            return {"__ci": "S", "ls": list(obj)}
+        if isinstance(obj, DateWrap):
+            return obj.date_js()
+        if isinstance(obj, RefWrap):
+            return obj.ref_js()
+        return super().default(obj)
+
     def default(self, obj):
         if isinstance(obj, ListWrap):
             return obj.ls_js()
@@ -331,10 +349,15 @@ class LeEncoder(JSONEncoder):
 
 class JS3Enc:
 
+    @staticmethod
+    def standard_serialization_f(x: Any, indent: int, cls: Any) -> str:
+        return json.dumps(x, indent=indent, cls=cls)
+
     def __init__(self, ins: T):
         self.ins: T = ins
         self.root: Optional[O] = None
         self.traversal: Optional[Traversal] = None
+        self.serialization_f: Callable[[Any, int, Any], str] = JS3Enc.standard_serialization_f
 
     def __encode(self) -> Any:
         self.traversal = Traversal()
@@ -345,10 +368,16 @@ class JS3Enc:
 
     def encode(self, indent: int = 2) -> str:
         x = self.__encode()
-        js: str = json.dumps(x, indent=indent, cls=LeEncoder)
+        # js: str = json.dumps(x, indent=indent, cls=LeEncoder)
+        js: str = self.serialization_f(x, indent, LeEncoder)
         return js
 
     def save(self, file: Path, indent: Optional[int] = None):
-        x = self.__encode()
+        js = self.encode(indent=indent)
         with open(file, "w") as f:
-            json.dump(x, f, indent=indent, cls=LeEncoder)
+            f.write(js)
+            # json.dump(x, f, indent=indent, cls=LeEncoder)
+
+    def with_serialization_f(self, f: Callable[[Any, int, Any], str]) -> JS3Enc:
+        self.serialization_f = f
+        return self
