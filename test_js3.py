@@ -98,3 +98,14 @@ class TestJS3Enc(TestCase):
         self.assertEqual(id(self.dummy_a.any_list_1), id(self.dummy_a.any_list_1[1]))
         self.assertEqual(id(d.any_list_1), id(d.any_list_1[1]))
 
+
+    def test_flat_1(self):
+        depth: int = 100 * 1000
+        parent: Dummy = self.dummy_a
+        for i in range(depth):
+            child: Dummy = Dummy()
+            child.name = str(i)
+            parent.related = child
+            parent = child
+        JS3Enc(self.dummy_a).save(self.js, indent=2)
+

@@ -8,6 +8,7 @@ import inspect
 import json
 from enum import Enum
 from pathlib import Path
+from shared.js3 import JS3
 from typing import Optional, Any, Dict, List, Type, Set
 
 SKIP: Set[str] = {'__id', '__ci', '__r'}
@@ -19,6 +20,7 @@ class JS3Dec:
         self.src: Optional[str] = None
         self.dicts: Optional[Dict[Any, Any] | List] = None
         self.id_2_obj: Dict[int, Any] = {}
+        self.flat_id_2_instance: Dict[int, Any] = {}
 
     def get_class_from_module(self, module_name: str, class_name: str):
         try:
@@ -132,6 +134,8 @@ class JS3Dec:
                 date_str: str = src_ins["v"]
                 d: datetime.date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
                 return d
+            if "_flat_" == ci:
+                return self.decode_flat(src_ins)
 
             # ref: Optional[int] = src_ins.get("__r", None)
             # if ref is not None:
@@ -142,6 +146,110 @@ class JS3Dec:
             for e in src_ins:
                 v = self.decode_instance(e)
                 ls.append(v)
+            return ls
+        if src_t in T_SIMPLE:
+            return src_ins
+
+    def decode_flat(self, src_d: Dict):
+        not_yet_decoded: Dict[int, Any] = {}
+        indices: List[int] = src_d['os']['ks']
+        vs: List[Any] = src_d['os']['vs']
+        for idx, v in zip(indices, vs):
+            ins = self.flat_decode_instance(src_ins=v, idx=idx)
+        print("stage 1 done")
+        for idx, v in zip(indices, vs):
+            self.flat_enrich(src_ins=v, idx=idx)
+        print('asdas gebe')
+
+    def flat_enrich(self, src_ins: Dict[Any, Any] | List[Any], idx: int) -> Any:
+        skeleton: Any = self.flat_id_2_instance[idx]
+        if isinstance(skeleton, JS3):
+            src_ins: Dict[Any, Any] = src_ins
+            for field, v in src_ins.items():
+                if field in SKIP:
+                    continue
+                decoded = self.flat_enrich_stage_2(v)
+                setattr(skeleton, field, decoded)
+        elif isinstance(skeleton, List):
+            src_ins: List[Any] = src_ins
+            for v in src_ins:
+                skeleton.append(self.flat_enrich_stage_2(v))
+        elif isinstance(skeleton, datetime.date):
+            return skeleton
+        elif isinstance(skeleton, Dict):
+            src_ins: Dict[str, Any] = src_ins
+
+            x = self.flat_enrich_stage_2(src_ins)
+            pass
+        else:
+            raise RuntimeError(f"Do not know what to do!")
+        pass
+
+    def flat_enrich_stage_2(self, src: Any) :
+        if src is None:
+            return None
+        if isinstance(src, Dict):
+            ref_id: Optional[int] = src.get('__r', None)
+            ci: Optional[str] = src.get('__ci', None)
+            if ref_id is not None:
+                return self.flat_id_2_instance[ref_id]
+            if ci == 'DW':
+                asd = self.decode_dw(v)
+            print('3rig450g')
+
+    def flat_decode_instance(self, src_ins: Dict[Any, Any] | List[Any], idx: int) -> Any:
+        ci: Optional[str] = None
+        idd: Optional[int] = None
+        cls: Optional[Type] = None
+        ins: Optional[Any] = None
+        src_t: Type = type(src_ins)
+        if isinstance(src_ins, Dict):
+            ci = src_ins.get("__ci", None)
+            idd = src_ins.get("__id", None)
+            ref_id: Optional[int] = src_ins.get('__r', None)
+            if ref_id is not None:
+                return self.id_2_obj[ref_id]
+            if ci is not None and "/" in ci:
+                splits: List[str] = ci.split("/")
+                mod: str = splits[0]
+                cl: str = splits[1]
+                cls = self.get_class_from_module(module_name=mod, class_name=cl)
+                ins = self.instance(cls)
+                self.id_2_obj[idd] = ins
+                self.flat_id_2_instance[idx] = ins
+                # for field, v in src_ins.items():
+                #     if field in SKIP:
+                #         continue
+                #     sub_ins: Any = self.decode_instance(v)
+                #     setattr(ins, field, sub_ins)
+                return ins
+            if 'LW' == ci:
+                self.flat_id_2_instance[idx] = []
+                return
+            if "DW" == ci:
+                self.flat_id_2_instance[idx] = {}
+                return
+            if "S" == ci:
+                self.flat_id_2_instance[idx] = set()
+                return
+            if "E" == ci:
+                self.flat_id_2_instance[idx] = self.decode_enum(src_ins)
+            if "DD" == ci:
+                date_str: str = src_ins["v"]
+                d: datetime.date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                self.flat_id_2_instance[idx] = d
+                return d
+
+            # ref: Optional[int] = src_ins.get("__r", None)
+            # if ref is not None:
+            #     return self.id_2_obj[ref]
+            raise RuntimeError(f"cannot deal with ci '{ci}'.")
+        if isinstance(src_ins, List):
+            ls: List = []
+            self.flat_id_2_instance[idx] = ls
+            # for e in src_ins:
+            #     v = self.decode_instance(e)
+            #     ls.append(v)
             return ls
         if src_t in T_SIMPLE:
             return src_ins
@@ -183,7 +291,7 @@ class JS3Dec:
             s.add(v)
         return s
 
-    def decode_enum(self, src_ins: Dict[str,Any]) -> Enum:
+    def decode_enum(self, src_ins: Dict[str, Any]) -> Enum:
         d: Dict = self.decode_dw(src_ins)
         index: int = src_ins["__id"]
         cci: str = src_ins["__cci"]

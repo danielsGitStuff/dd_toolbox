@@ -175,6 +175,7 @@ class O:
         self.is_date: bool = isinstance(ins, datetime.date)
         self.is_tuple: bool = isinstance(ins, Tuple)
         self.representation: Dict[str, Type] = {}
+        self.flat_idx_2_instances: Dict[int, Any] = {}
 
     def ref_inc(self) -> O:
         self.ref_counter += 1
@@ -300,6 +301,52 @@ class O:
         else:
             raise NotImplementedError
 
+    def flat(self, root: Optional[O] = None) -> Any:
+        if self.is_simple:
+            return self.ins
+        if self.is_none:
+            return None
+        if self.used:
+            return self.ref()
+        self.used = True
+        if self.is_js:
+            d: Dict[str, Any] = {"__id": self.index, "__ci": self.ci}
+            root.flat_idx_2_instances[self.index] = d
+            for field, o in self.d.items():
+                o: O = o
+                d[field] = o.flat(root=root)
+
+        elif self.is_list or self.is_tuple:
+            ls: List[Any] = []
+            root.flat_idx_2_instances[self.index] = ListWrap(o=self, something=ls)
+            for o in self.ls:
+                ls.append(o.flat(root=root))
+        elif self.is_set:
+            ss: List[Any] = []
+            root.flat_idx_2_instances[self.index] = SetWrap(o=self, something=ss)
+            for o in self.s:
+                ss.append(o.flat(root=root))
+        elif self.is_dict:
+            d: Dict[Any, Any] = {}
+            root.flat_idx_2_instances[self.index] = DictWrap(o=self, something=d)
+            for kk, vv in self.dd.items():
+                k: Any = kk.flat(root=root)
+                v: Any = vv.flat(root=root)
+                d[k] = v
+        elif self.is_enum:
+            d: Dict = {}
+            root.flat_idx_2_instances[self.index] = EnumWrap(o=self, d=d, ci=self.ci, index=self.index)
+            for k, v in self.dd.items():
+                d[k.flat(root=root)] = v.flat(root=root)
+        elif self.is_date:
+            root.flat_idx_2_instances[self.index] = DateWrap(o=self, d=self.ins)
+        if self == root:
+            dw: DictWrap = DictWrap(o=self, something=self.flat_idx_2_instances)
+            d: Dict[str, Any] = {"__ci": "_flat_", "os": dw.dict_js()}
+            return d
+        else:
+            return self.ref()
+
     def __repr__(self):
         s = f"{self.ci} <- {self.iid}"
         if self.is_simple:
@@ -358,22 +405,33 @@ class JS3Enc:
         self.root: Optional[O] = None
         self.traversal: Optional[Traversal] = None
         self.serialization_f: Callable[[Any, int, Any], str] = JS3Enc.standard_serialization_f
+        self._flat: bool = False
 
-    def __encode(self) -> Any:
+    def flat(self) -> JS3Enc:
+        """will encode the json into a flat list. prevents recursion errors."""
+        self._flat = True
+        return self
+
+    def __encode(self, debug: bool = False) -> Any:
         self.traversal = Traversal()
         self.root = self.traversal.create_o(self.ins)
         self.root.traverse(traversal=self.traversal)
-        x = self.root.full()
+        x: Any
+        x = self.root.flat(root=self.root) if self._flat else self.root.full()
+        print("json encoded")
         return x
 
-    def encode(self, indent: int = 2) -> str:
-        x = self.__encode()
+    def encode(self, indent: int = 2, debug: bool = False) -> str:
+        x = self.__encode(debug=debug)
+        # srf: SelfReferenceFinder = SelfReferenceFinder(x)
+        # srf.traverse()
         # js: str = json.dumps(x, indent=indent, cls=LeEncoder)
         js: str = self.serialization_f(x, indent, LeEncoder)
         return js
 
-    def save(self, file: Path, indent: Optional[int] = None):
-        js = self.encode(indent=indent)
+    def save(self, file: Path, indent: Optional[int] = None, debug: bool = False):
+        js = self.encode(indent=indent, debug=debug)
+        print("json serialized")
         with open(file, "w") as f:
             f.write(js)
             # json.dump(x, f, indent=indent, cls=LeEncoder)
