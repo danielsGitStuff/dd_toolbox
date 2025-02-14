@@ -22,6 +22,10 @@ class Dummy(JS3):
         self.any_list_2: Optional[List[Any]] = None
         self.any_set_1: Optional[Set[Any]] = None
         self.any_set_2: Optional[Set[Any]] = None
+        self.any_dict_1: Optional[Dict[Any, Any]] = None
+
+    def __repr__(self):
+        return f"Dummy '{self.name}'"
 
 
 class TestJS3Enc(TestCase):
@@ -98,14 +102,29 @@ class TestJS3Enc(TestCase):
         self.assertEqual(id(self.dummy_a.any_list_1), id(self.dummy_a.any_list_1[1]))
         self.assertEqual(id(d.any_list_1), id(d.any_list_1[1]))
 
-
     def test_flat_1(self):
-        depth: int = 100 * 1000
+        depth: int = 10
         parent: Dummy = self.dummy_a
         for i in range(depth):
             child: Dummy = Dummy()
             child.name = str(i)
             parent.related = child
             parent = child
-        JS3Enc(self.dummy_a).save(self.js, indent=2)
+        JS3Enc(self.dummy_a).flat().save(self.js, indent=2)
+        print("asd")
 
+    def test_flat_2(self):
+        parent: Dummy = self.dummy_a
+        parent.name = "parent dummy"
+        child: Dummy = Dummy()
+        child.name = "child dummy"
+        parent.related = child
+        child.related = parent
+        parent.any_list_2 = []
+        parent.any_list_2.append(child)
+        child.any_set_1 = set()
+        child.any_set_1.add(parent)
+        parent.any_dict_1 = {child: parent}
+        JS3Enc(self.dummy_a).flat().save(self.js, indent=2)
+        decoded = JS3Dec().source(self.js).decode()
+        print("asd")

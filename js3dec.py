@@ -151,51 +151,58 @@ class JS3Dec:
             return src_ins
 
     def decode_flat(self, src_d: Dict):
-        not_yet_decoded: Dict[int, Any] = {}
         indices: List[int] = src_d['os']['ks']
         vs: List[Any] = src_d['os']['vs']
+        # the first iteration will create all referencable objects (Lists, Sets, JS3, Enum etc.)
+        # and put it in a dict keyed by its reference id
         for idx, v in zip(indices, vs):
-            ins = self.flat_decode_instance(src_ins=v, idx=idx)
-        print("stage 1 done")
+            self.flat_decode_instance(src_ins=v, idx=idx)
+        # stage 2 reiterates all of it again and resolves all references and adds missing properties
         for idx, v in zip(indices, vs):
             self.flat_enrich(src_ins=v, idx=idx)
-        print('asdas gebe')
 
     def flat_enrich(self, src_ins: Dict[Any, Any] | List[Any], idx: int) -> Any:
-        skeleton: Any = self.flat_id_2_instance[idx]
-        if isinstance(skeleton, JS3):
+        decoded: Any = self.flat_id_2_instance[idx]
+        if isinstance(decoded, JS3):
             src_ins: Dict[Any, Any] = src_ins
-            for field, v in src_ins.items():
+            for field, src in src_ins.items():
                 if field in SKIP:
                     continue
-                decoded = self.flat_enrich_stage_2(v)
-                setattr(skeleton, field, decoded)
-        elif isinstance(skeleton, List):
+                decoded_prop = self.flat_enrich_stage_2(src)
+                setattr(decoded, field, decoded_prop)
+        elif isinstance(decoded, List):
             src_ins: List[Any] = src_ins
-            for v in src_ins:
-                skeleton.append(self.flat_enrich_stage_2(v))
-        elif isinstance(skeleton, datetime.date):
-            return skeleton
-        elif isinstance(skeleton, Dict):
+            for src in src_ins:
+                decoded.append(self.flat_enrich_stage_2(src))
+        elif isinstance(decoded, datetime.date):
+            return decoded
+        elif isinstance(decoded, Dict):
             src_ins: Dict[str, Any] = src_ins
-
-            x = self.flat_enrich_stage_2(src_ins)
+            ks: List[Any] = src_ins["ks"]
+            vs: List[Any] = src_ins["vs"]
+            for k, v in zip(ks, vs):
+                decoded_k = self.flat_enrich_stage_2(k)
+                decoded_v = self.flat_enrich_stage_2(v)
+                decoded[decoded_k] = decoded_v
             pass
+        elif isinstance(decoded, Set):
+            for src in src_ins['s']:
+                decoded.add(self.flat_enrich_stage_2(src))
         else:
             raise RuntimeError(f"Do not know what to do!")
         pass
 
-    def flat_enrich_stage_2(self, src: Any) :
+    def flat_enrich_stage_2(self, src: Any):
         if src is None:
             return None
+        t: Type = type(src)
+        if t in T_SIMPLE:
+            return src
         if isinstance(src, Dict):
             ref_id: Optional[int] = src.get('__r', None)
-            ci: Optional[str] = src.get('__ci', None)
             if ref_id is not None:
                 return self.flat_id_2_instance[ref_id]
-            if ci == 'DW':
-                asd = self.decode_dw(v)
-            print('3rig450g')
+            raise RuntimeError("needs debugging")
 
     def flat_decode_instance(self, src_ins: Dict[Any, Any] | List[Any], idx: int) -> Any:
         ci: Optional[str] = None
@@ -217,11 +224,6 @@ class JS3Dec:
                 ins = self.instance(cls)
                 self.id_2_obj[idd] = ins
                 self.flat_id_2_instance[idx] = ins
-                # for field, v in src_ins.items():
-                #     if field in SKIP:
-                #         continue
-                #     sub_ins: Any = self.decode_instance(v)
-                #     setattr(ins, field, sub_ins)
                 return ins
             if 'LW' == ci:
                 self.flat_id_2_instance[idx] = []
@@ -239,17 +241,10 @@ class JS3Dec:
                 d: datetime.date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
                 self.flat_id_2_instance[idx] = d
                 return d
-
-            # ref: Optional[int] = src_ins.get("__r", None)
-            # if ref is not None:
-            #     return self.id_2_obj[ref]
             raise RuntimeError(f"cannot deal with ci '{ci}'.")
         if isinstance(src_ins, List):
             ls: List = []
             self.flat_id_2_instance[idx] = ls
-            # for e in src_ins:
-            #     v = self.decode_instance(e)
-            #     ls.append(v)
             return ls
         if src_t in T_SIMPLE:
             return src_ins
