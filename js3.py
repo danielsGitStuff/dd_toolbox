@@ -418,23 +418,17 @@ class JS3Enc:
         self.root.traverse(traversal=self.traversal)
         x: Any
         x = self.root.flat(root=self.root) if self._flat else self.root.full()
-        print("json encoded")
         return x
 
     def encode(self, indent: int = 2, debug: bool = False) -> str:
         x = self.__encode(debug=debug)
-        # srf: SelfReferenceFinder = SelfReferenceFinder(x)
-        # srf.traverse()
-        # js: str = json.dumps(x, indent=indent, cls=LeEncoder)
         js: str = self.serialization_f(x, indent, LeEncoder)
         return js
 
     def save(self, file: Path, indent: Optional[int] = None, debug: bool = False):
         js = self.encode(indent=indent, debug=debug)
-        print("json serialized")
         with open(file, "w") as f:
             f.write(js)
-            # json.dump(x, f, indent=indent, cls=LeEncoder)
 
     def with_serialization_f(self, f: Callable[[Any, int, Any], str]) -> JS3Enc:
         self.serialization_f = f

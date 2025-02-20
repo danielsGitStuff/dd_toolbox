@@ -9,6 +9,8 @@ import json
 from enum import Enum
 from pathlib import Path
 from shared.js3 import JS3
+from shared.lok import Lok
+from shared.otimer import OTimer
 from typing import Optional, Any, Dict, List, Type, Set
 
 SKIP: Set[str] = {'__id', '__ci', '__r'}
@@ -21,6 +23,7 @@ class JS3Dec:
         self.dicts: Optional[Dict[Any, Any] | List] = None
         self.id_2_obj: Dict[int, Any] = {}
         self.flat_id_2_instance: Dict[int, Any] = {}
+        self.lok: Lok = Lok(src=self)
 
     def get_class_from_module(self, module_name: str, class_name: str):
         try:
@@ -150,16 +153,21 @@ class JS3Dec:
         if src_t in T_SIMPLE:
             return src_ins
 
-    def decode_flat(self, src_d: Dict):
+    def decode_flat(self, src_d: Dict) -> Any:
         indices: List[int] = src_d['os']['ks']
         vs: List[Any] = src_d['os']['vs']
         # the first iteration will create all referencable objects (Lists, Sets, JS3, Enum etc.)
         # and put it in a dict keyed by its reference id
+        t1: OTimer = OTimer("JS decode creating instances...").start()
         for idx, v in zip(indices, vs):
             self.flat_decode_instance(src_ins=v, idx=idx)
+        t1.stop().print()
         # stage 2 reiterates all of it again and resolves all references and adds missing properties
+        t2: OTimer = OTimer("JS decode: enriching...").start()
         for idx, v in zip(indices, vs):
             self.flat_enrich(src_ins=v, idx=idx)
+        t2.stop().print()
+        return self.flat_id_2_instance[0]
 
     def flat_enrich(self, src_ins: Dict[Any, Any] | List[Any], idx: int) -> Any:
         decoded: Any = self.flat_id_2_instance[idx]
