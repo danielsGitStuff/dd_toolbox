@@ -10,7 +10,8 @@ from typing import List, Dict, Set, TypeVar, Optional, Type, Any, Tuple, Callabl
 
 
 class JS3:
-    ignored: Set[str] = set()
+    def __init__(self):
+        self.ignored: Set[str] = set()
 
 
 SKIP: Set[str] = {'__objclass__', '_sort_order_'}
