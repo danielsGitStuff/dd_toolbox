@@ -11,7 +11,7 @@ from pathlib import Path
 from shared.js3 import JS3
 from shared.lok import Lok
 from shared.otimer import OTimer
-from typing import Optional, Any, Dict, List, Type, Set
+from typing import Optional, Any, Dict, List, Type, Set, Callable
 
 SKIP: Set[str] = {'__id', '__ci', '__r'}
 T_SIMPLE: Set[Type] = {str, bool, int, float}
@@ -24,6 +24,7 @@ class JS3Dec:
         self.id_2_obj: Dict[int, Any] = {}
         self.flat_id_2_instance: Dict[int, Any] = {}
         self.lok: Lok = Lok(src=self)
+        self.f_decode: Callable[[str], Any] = json.loads
 
     def get_class_from_module(self, module_name: str, class_name: str):
         try:
@@ -43,7 +44,7 @@ class JS3Dec:
         return class_
 
     def __read_src(self):
-        self.dicts = json.loads(self.src)
+        self.dicts = self.f_decode(self.src)
 
     def source(self, src: Path | str) -> JS3Dec:
         if isinstance(src, str):
@@ -51,6 +52,9 @@ class JS3Dec:
         else:
             with open(src, 'r', encoding='utf-8') as f:
                 self.src = f.read()
+        return self
+    def with_decode_f(self, f:Callable[[str], Any]) -> JS3Dec:
+        self.f_decode = f
         return self
 
     def decode(self) -> Any:
