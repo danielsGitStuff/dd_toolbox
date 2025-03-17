@@ -29,7 +29,7 @@ class OTimer:
         return self
 
     def get_duration_in_ms(self) -> int:
-        return int(self.sum / 1e6)
+        return int(self.sum / 10)
 
     def get_duration_in_ns(self) -> int:
         return self.sum
