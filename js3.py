@@ -398,14 +398,20 @@ class LeEncoder(JSONEncoder):
 class JS3Enc:
 
     @staticmethod
-    def standard_serialization_f(x: Any, indent: int, cls: Any) -> str:
-        return json.dumps(x, indent=indent, cls=cls)
+    def standard_serialization_f(x: Any, indent: int, cls: Any, target_f: Optional[Path] = None) -> Optional[str]:
+        if target_f is not None:
+            print(f"JS3Enc 2 file '{target_f}'")
+            with open(target_f, 'w') as f:
+                json.dump(x, f, indent=indent, cls=cls)
+                return None
+        else:
+            return json.dumps(x, indent=indent, cls=cls)
 
     def __init__(self, ins: T):
         self.ins: T = ins
         self.root: Optional[O] = None
         self.traversal: Optional[Traversal] = None
-        self.serialization_f: Callable[[Any, int, Any], str] = JS3Enc.standard_serialization_f
+        self.serialization_f: Callable[[Any, int, Any, Optional[Path]], Optional[str]] = JS3Enc.standard_serialization_f
         self._flat: bool = False
 
     def flat(self) -> JS3Enc:
@@ -421,15 +427,13 @@ class JS3Enc:
         x = self.root.flat(root=self.root) if self._flat else self.root.full()
         return x
 
-    def encode(self, indent: int = 2, debug: bool = False) -> str:
+    def encode(self, indent: int = 2, debug: bool = False, target_f: Optional[Path] = None) -> Optional[str]:
         x = self.__encode(debug=debug)
-        js: str = self.serialization_f(x, indent, LeEncoder)
+        js: Optional[str] = self.serialization_f(x, indent, LeEncoder, target_f)
         return js
 
     def save(self, file: Path, indent: Optional[int] = None, debug: bool = False):
-        js = self.encode(indent=indent, debug=debug)
-        with open(file, "w") as f:
-            f.write(js)
+        self.encode(indent=indent, debug=debug, target_f=file)
 
     def with_serialization_f(self, f: Callable[[Any, int, Any], str]) -> JS3Enc:
         self.serialization_f = f
