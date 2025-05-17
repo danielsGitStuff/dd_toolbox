@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import sys
-
 import math
-
+import sys
 import traceback
 from concurrent.futures import ProcessPoolExecutor
-from shared.lok import Lok
 from typing import List, Any, Optional
+
+from shared.lok import Lok
 
 
 class Workload:
@@ -41,6 +40,7 @@ class Workload:
 
 class AutoBatchWorkload(Workload):
     """used by Workhorse when you enable batching. Just encapsulates actual workloads."""
+
     def __init__(self, workloads: List[Workload]):
         super().__init__()
         self.workloads: List[Workload] = workloads
@@ -118,8 +118,8 @@ class Workhorse:
         self.closed: bool = False
         self._batch: bool = False
         self._batch_size: Optional[int] = 0
-        self.executor: ProcessPoolExecutor = ProcessPoolExecutor(max_workers=self.processes)
         self.lok: Lok = Lok(src=self)
+        self.executor: Optional[ProcessPoolExecutor] = None
 
     def batch(self, batch_size: Optional[int] = None) -> Workhorse:
         self._batch = True
@@ -137,9 +137,11 @@ class Workhorse:
         futures = []
         remaining_work: List[Workload] = [w for w in self.workloads if not w.check_past_execution()]
         workloads: List[Workload] = self.workloads.copy()
+        no_of_processes: int = min(len(workloads), self.processes)
+        self.executor = ProcessPoolExecutor(max_workers=no_of_processes)
         if len(remaining_work) > 0:
             self.lok(
-                f"'{type(self).__name__}' will work on {len(remaining_work)} workloads using {self.processes} processes. Batch is {self._batch}, batch size is {self._batch_size}.")
+                f"'{type(self).__name__}' will work on {len(remaining_work)} workloads using {no_of_processes} processes. Batch is {self._batch}, batch size is {self._batch_size}.")
             if self._batch:
                 # batch the remaining workloads
                 batched_work: List[List[Workload]] = [[]]
@@ -186,5 +188,4 @@ class Workhorse:
     def reset(self) -> Workhorse:
         self.closed = False
         self.workloads = []
-        self.executor = ProcessPoolExecutor(max_workers=self.processes)
         return self
