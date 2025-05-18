@@ -133,6 +133,8 @@ class Workhorse:
     def join(self) -> List:
         if self.closed:
             raise RuntimeError('pool already closed!')
+        if len(self.workloads) == 0:
+            return []
         self.closed = True
         futures = []
         remaining_work: List[Workload] = [w for w in self.workloads if not w.check_past_execution()]
