@@ -15,6 +15,13 @@ class FileUtil:
         return name[:idx]
 
     @staticmethod
+    def is_directory() -> Callable[[Path], bool]:
+        def f(path: Path) -> bool:
+            return path.is_dir()
+
+        return lambda p: f(p)
+
+    @staticmethod
     def condition_file_extension(extension: str) -> Callable[[Path], bool]:
         extension = extension.lower()
 
