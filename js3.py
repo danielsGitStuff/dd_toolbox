@@ -125,7 +125,8 @@ class SetWrap(Wrap):
 
 
 class Traversal:
-    def __init__(self):
+    def __init__(self, cfg_serialize_underscore_attributes: bool = True):
+        self.cfg_serialize_underscore_attributes: bool = cfg_serialize_underscore_attributes
         self.visited_instances: Dict[int, O] = {}
         self.ref_counter: Dict[int, int] = {}
         self.index: int = 0
@@ -175,6 +176,7 @@ class O:
         self.is_enum: bool = isinstance(ins, Enum)
         self.is_date: bool = isinstance(ins, datetime.date)
         self.is_tuple: bool = isinstance(ins, Tuple)
+        self.is_unknown: bool = not (self.is_simple or self.is_js or self.is_list or self.is_set or self.is_dict or self.is_none or self.is_enum or self.is_date or self.is_tuple)
         self.representation: Dict[str, Type] = {}
         self.flat_idx_2_instances: Dict[int, Any] = {}
 
@@ -191,13 +193,14 @@ class O:
             js: JS3 = self.ins
             self.is_js = True
             for k, v in js.__dict__.items():
-                if k in js.ignored:
+                if k in js.ignored or (k.startswith("_") and not traversal.cfg_serialize_underscore_attributes):
                     continue
                 o: O = traversal.create_o(v)
-                self.d[k] = o
                 traversal.stack.append(k)
                 self.representation[k] = JS3
                 o.traverse(traversal=traversal)
+                if not o.is_unknown:
+                    self.d[k] = o
                 traversal.stack.pop()
         elif self.is_simple or self.is_none:
             pass
@@ -255,7 +258,8 @@ class O:
         elif self.is_date:
             d: datetime.date = self.ins
         else:
-            raise RuntimeError(f"cannot handle '{type(self.ins)}")
+            pass
+            # raise RuntimeError(f"cannot handle '{type(self.ins)}")
         traversal.stack.pop()
 
     def ref(self) -> RefWrap:
@@ -413,6 +417,11 @@ class JS3Enc:
         self.traversal: Optional[Traversal] = None
         self.serialization_f: Callable[[Any, int, Any, Optional[Path]], Optional[str]] = JS3Enc.standard_serialization_f
         self._flat: bool = False
+        self._cfg_serialize_underscore_attributes: bool = True
+
+    def ignore_underscore(self) -> JS3Enc:
+        self._cfg_serialize_underscore_attributes = False
+        return self
 
     def flat(self) -> JS3Enc:
         """will encode the json into a flat list. prevents recursion errors."""
@@ -420,7 +429,7 @@ class JS3Enc:
         return self
 
     def __encode(self, debug: bool = False) -> Any:
-        self.traversal = Traversal()
+        self.traversal = Traversal(cfg_serialize_underscore_attributes=self._cfg_serialize_underscore_attributes)
         self.root = self.traversal.create_o(self.ins)
         self.root.traverse(traversal=self.traversal)
         x: Any
