@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import inspect
 import json
 from datetime import date
 from enum import Enum
@@ -159,9 +160,7 @@ class O:
         self.iid: int = id(ins)
         self.index: Optional[int] = None
         self.t: Type = type(ins)
-        mod: str = self.t.__module__
-        cla: str = self.t.__name__
-        self.ci: str = f"{mod}/{cla}"
+        self.ci: str = self.__find_ci()
         self.is_simple: bool = self.t in T_SIMPLE
         self.d: Dict[str, O] = {}
         self.dd: Dict[O, O] = {}
@@ -179,6 +178,19 @@ class O:
         self.is_unknown: bool = not (self.is_simple or self.is_js or self.is_list or self.is_set or self.is_dict or self.is_none or self.is_enum or self.is_date or self.is_tuple)
         self.representation: Dict[str, Type] = {}
         self.flat_idx_2_instances: Dict[int, Any] = {}
+
+    def __find_ci(self) -> str:
+        mod: str = self.t.__module__
+        cla: str = self.t.__name__
+        if mod == '__main__':
+            # Inside the 'if mod == __main__:' block
+            try:
+                file_path: Path = Path(inspect.getfile(self.t))
+                mod_name: str = file_path.name[:-len(file_path.suffix)]
+                mod = f"{file_path.parent.name}.{mod_name}"
+            except TypeError:
+                mod = "interactive"
+        return f"{mod}/{cla}"
 
     def ref_inc(self) -> O:
         self.ref_counter += 1
