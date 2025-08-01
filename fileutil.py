@@ -38,17 +38,17 @@ class FileUtil:
     def __init__(self, directory: Path | str, recursive: bool = False):
         self.recursive: bool = recursive
         self.directory: Path = directory if isinstance(directory, Path) else Path(directory)
-        self.conditions: List[Callable[[Path], bool]] = []
-        self.collected_files: Optional[List[Path]] = None
+        self.conditions: list[Callable[[Path], bool]] = []
+        self.collected_files: Optional[list[Path]] = None
 
     def with_condition(self, condition: Callable[[Path], bool]) -> FileUtil:
         self.conditions.append(condition)
         return self
 
     def __recurse(self, directory: Path):
-        paths: List[Path] = [Path(directory, name) for name in os.listdir(directory)]
-        files: List[Path] = [p for p in paths if p.is_file()]
-        subdirectories: List[Path] = [p for p in paths if p.is_dir()]
+        paths: list[Path] = [Path(directory, name) for name in os.listdir(directory)]
+        files: list[Path] = [p for p in paths if p.is_file()]
+        subdirectories: list[Path] = [p for p in paths if p.is_dir()]
         if self.recursive:
             for subdir in subdirectories:
                 self.__recurse(directory=subdir)
@@ -57,7 +57,7 @@ class FileUtil:
             if ok:
                 self.collected_files.append(f)
 
-    def find(self) -> List[Path]:
+    def find(self) -> list[Path]:
         if self.collected_files is not None:
             return self.collected_files
         self.collected_files = []
