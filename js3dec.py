@@ -53,7 +53,8 @@ class JS3Dec:
             with open(src, 'r', encoding='utf-8') as f:
                 self.src = f.read()
         return self
-    def with_decode_f(self, f:Callable[[str], Any]) -> JS3Dec:
+
+    def with_decode_f(self, f: Callable[[str], Any]) -> JS3Dec:
         self.f_decode = f
         return self
 
@@ -69,6 +70,8 @@ class JS3Dec:
         Otherwise, it attempts to find a constructor and call it with None values
         for all arguments.
         """
+        if cls is None:
+            self.lok.err("CLS is None!")
         try:
             return cls()
         except TypeError as e:
@@ -307,6 +310,8 @@ class JS3Dec:
         cl: str = cc[1]
         name = d["_name_"]
         en = self.get_class_from_module(module_name=mod, class_name=cl)
+        if en is None:
+            self.lok.err(f"Could not create class from module '{mod}' and class name '{cl}'.")
         e: Enum = en[name]
         self.id_2_obj[index] = e
         return e
