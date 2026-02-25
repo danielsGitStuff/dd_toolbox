@@ -208,6 +208,8 @@ class O:
                 if k in js.ignored or (k.startswith("_") and not traversal.cfg_serialize_underscore_attributes):
                     continue
                 o: O = traversal.create_o(v)
+                if o.is_unknown:
+                    continue
                 traversal.stack.append(k)
                 self.representation[k] = JS3
                 o.traverse(traversal=traversal)
@@ -220,6 +222,8 @@ class O:
             ls: List[Any] = self.ins
             for v in ls:
                 o: O = traversal.create_o(v)
+                if o.is_unknown:
+                    continue
                 self.ls.append(o)
                 traversal.stack.append('LS')
                 # if v is not None and v.__class__.__qualname__ == 'NXM':
@@ -230,6 +234,8 @@ class O:
             ts: Tuple = self.ins
             for t in ts:
                 o: O = traversal.create_o(t)
+                if o.is_unknown:
+                    continue
                 self.ls.append(o)
                 traversal.stack.append('TS')
                 o.traverse(traversal=traversal)
@@ -238,6 +244,8 @@ class O:
             ss: Set[Any] = self.ins
             for s in ss:
                 o: O = traversal.create_o(s)
+                if o.is_unknown:
+                    continue
                 self.s.add(o)
                 traversal.stack.append("SET")
                 o.traverse(traversal=traversal)
@@ -246,6 +254,8 @@ class O:
             for k, v in self.ins.items():
                 ok: O = traversal.create_o(k)
                 ov: O = traversal.create_o(v)
+                if ok.is_unknown or ov.is_unknown:
+                    continue
                 self.dd[ok] = ov
                 traversal.stack.append("D.K")
                 ok.traverse(traversal=traversal)
