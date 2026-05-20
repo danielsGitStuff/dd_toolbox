@@ -1,7 +1,7 @@
 import shutil
 
 from pathlib import Path
-from shared.workhorse import Workhorse, Workload
+from .workhorse import Workhorse, Workload
 from typing import Any
 from unittest import TestCase
 

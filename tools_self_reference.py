@@ -1,6 +1,6 @@
 import datetime
-from shared.js3 import ListWrap, SetWrap, DictWrap, RefWrap, DateWrap
-from shared.lok import Lok
+from .js3 import ListWrap, SetWrap, DictWrap, RefWrap, DateWrap
+from .lok import Lok
 
 from typing import Any, List, Set, Dict
 

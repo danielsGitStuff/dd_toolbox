@@ -8,9 +8,9 @@ import inspect
 import json
 from enum import Enum
 from pathlib import Path
-from shared.js3 import JS3
-from shared.lok import Lok
-from shared.otimer import OTimer
+from .js3 import JS3
+from .lok import Lok
+from .otimer import OTimer
 from typing import Optional, Any, Dict, List, Type, Set, Callable
 
 SKIP: Set[str] = {'__id', '__ci', '__r'}

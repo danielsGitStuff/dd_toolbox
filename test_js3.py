@@ -1,8 +1,8 @@
 import datetime
 import os
 from pathlib import Path
-from shared.js3 import JS3, JS3Enc
-from shared.js3dec import JS3Dec
+from .js3 import JS3, JS3Enc
+from .js3dec import JS3Dec
 from typing import Optional, List, Dict, Any, Set
 from unittest import TestCase
 

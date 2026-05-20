@@ -6,7 +6,7 @@ import traceback
 from concurrent.futures import ProcessPoolExecutor
 from typing import List, Any, Optional
 
-from shared.lok import Lok
+from .lok import Lok
 
 
 class Workload:
