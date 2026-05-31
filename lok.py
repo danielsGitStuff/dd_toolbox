@@ -40,26 +40,27 @@ class Lok:
         self.enabled: bool = True
         self.stored_lines: List[str] = []
 
-    def __call__(self, obj: any, file: Optional[TextIO | LokOutType] = None):
+    def __call__(self, obj: any, file: Optional[TextIO | LokOutType] = None, indent: Optional[int] = None):
         out: LokOutType = self.out
         if file is not None:
             if isinstance(file, LokOutType):
                 out = file
             else:
                 out = LokOutType.by_text_io(file)
-        self.__print_any(obj, out=out.out())
+        self.__print_any(obj, out=out.out(), indent=indent)
 
     def set_enabled(self, enabled: bool) -> Lok:
         self.enabled = enabled
         return self
 
-    def __print_any(self, obj: any, out: TextIO, override_enabled: bool = False):
+    def __print_any(self, obj: any, out: TextIO, override_enabled: bool = False, indent: Optional[int] = None):
         process_info = multiprocessing.current_process().name
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         s: str = f"{obj}"
         s_lines: List[str] = s.split("\n")
         for s_line in s_lines:
-            line: str = f"[{self.name}] [{process_info}], {timestamp}: {s_line}"
+            indent_str: str = '' if indent is None else '  ' * indent
+            line: str = f"[{self.name}] [{process_info}], {timestamp}: {indent_str}{s_line}"
             self.__print_line(line, out=out, override_enabled=override_enabled)
 
     def __print_line(self, line: str, out: TextIO, override_enabled: bool = False):
@@ -68,12 +69,12 @@ class Lok:
         else:
             self.stored_lines.append(line)
 
-    def print(self, obj: any, out: Optional[TextIO] = None):
+    def print(self, obj: any, out: Optional[TextIO] = None, indent: Optional[int] = None):
         out = self.out.out() if out is None else out
-        self.__print_any(obj=obj, out=out)
+        self.__print_any(obj=obj, out=out, indent=indent)
 
-    def err(self, obj: any):
-        self.__print_any(obj=obj, out=sys.stderr, override_enabled=True)
+    def err(self, obj: any, indent: Optional[int] = None):
+        self.__print_any(obj=obj, out=sys.stderr, override_enabled=True, indent=indent)
 
     def print_self(self) -> Lok:
         if len(self.stored_lines) == 0:
