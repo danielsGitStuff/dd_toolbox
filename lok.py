@@ -54,6 +54,8 @@ class Lok:
         return self
 
     def __print_any(self, obj: any, out: TextIO, override_enabled: bool = False, indent: Optional[int] = None):
+        if not self.enabled:
+            return
         process_info = multiprocessing.current_process().name
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         s: str = f"{obj}"
