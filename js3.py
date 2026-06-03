@@ -326,6 +326,10 @@ class O:
         if self.is_date:
             return DateWrap(o=self, d=self.ins)
         else:
+            print(f"Error serializing {self.ins}")
+            if self.ins is not None:
+                t: str = self.ins.__class__.__name__
+                print(f"Cannot serialize instance of: {t}")
             raise NotImplementedError
 
     def flat(self, root: Optional[O] = None) -> Any:
