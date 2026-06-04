@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import sys
-from datetime import datetime
-
 import multiprocessing
+import os
+import sys
 import traceback
-
+from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import TextIO, Any, Optional, List
 
 
@@ -39,6 +39,7 @@ class Lok:
         self.out: LokOutType = LokOutType.by_text_io(out)
         self.enabled: bool = True
         self.stored_lines: List[str] = []
+        self.file: Optional[Path] = None
 
     def __call__(self, obj: any, file: Optional[TextIO | LokOutType] = None, indent: Optional[int] = None):
         out: LokOutType = self.out
@@ -68,6 +69,7 @@ class Lok:
     def __print_line(self, line: str, out: TextIO, override_enabled: bool = False):
         if self.enabled or override_enabled:
             print(line, file=out)
+            self._print_2_file(line)
         else:
             self.stored_lines.append(line)
 
@@ -93,3 +95,23 @@ class Lok:
             lines.extend(traceback.format_list(tb))
         for l in lines:
             self.err(l)
+
+    def _print_2_file(self, line: str):
+        if not self.file:
+            return
+        try:
+            self.file.parent.mkdir(parents=True, exist_ok=True)
+            with self.file.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception as e:
+            print(f"Lok._print_2_file failed: {e}", file=sys.stderr)
+
+    def log_file(self, file: Path | str) -> Lok:
+        self.file = file if isinstance(file, Path) else Path(file)
+        return self
+
+    def log_file_reset(self) -> Lok:
+        assert self.file is not None
+        if self.file.exists():
+            os.remove(self.file)
+        return self
