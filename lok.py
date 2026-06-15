@@ -7,7 +7,7 @@ import traceback
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import TextIO, Any, Optional, List
+from typing import TextIO, Any, Optional, List, Callable
 
 
 class LokOutType(Enum):
@@ -33,13 +33,24 @@ class Lok:
     def from_instance(ins: Any) -> Lok:
         return Lok(name=ins.__class__.__qualname__)
 
-    def __init__(self, name: Optional[str] = None, src: Optional[Any] = None, out: TextIO = sys.stdout):
-        self.name: str = src.__class__.__qualname__ if name is None else name
-        assert self.name is not None
+    def __init__(self, name: Optional[str | Callable[[], str]] = None, src: Optional[Any] = None, out: TextIO = sys.stdout):
+        self._name_callable: Optional[Callable[[], str]] = None
+        self.name: Optional[str] = src.__class__.__qualname__ if name is None else name if isinstance(name, str) else None
+        if isinstance(name, Callable):
+            self._name_callable = name
+        assert self.name is not None or self._name_callable is not None
         self.out: LokOutType = LokOutType.by_text_io(out)
         self.enabled: bool = True
         self.stored_lines: List[str] = []
         self.file: Optional[Path] = None
+
+    def _name(self) -> str:
+        if self.name is not None:
+            return self.name
+        elif self._name_callable is not None:
+            return self._name_callable()
+        else:
+            raise ValueError("cannot get name")
 
     def __call__(self, obj: any, file: Optional[TextIO | LokOutType] = None, indent: Optional[int] = None):
         out: LokOutType = self.out
@@ -63,7 +74,7 @@ class Lok:
         s_lines: List[str] = s.split("\n")
         for s_line in s_lines:
             indent_str: str = '' if indent is None else '  ' * indent
-            line: str = f"[{self.name}] [{process_info}], {timestamp}: {indent_str}{s_line}"
+            line: str = f"[{self._name()}] [{process_info}], {timestamp}: {indent_str}{s_line}"
             self.__print_line(line, out=out, override_enabled=override_enabled)
 
     def __print_line(self, line: str, out: TextIO, override_enabled: bool = False):
@@ -83,7 +94,7 @@ class Lok:
     def print_self(self) -> Lok:
         if len(self.stored_lines) == 0:
             return self
-        print(f"Lok '{self.name}'")
+        print(f"Lok '{self._name()}'")
         for l in self.stored_lines:
             print(l)
         return self
